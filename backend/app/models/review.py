@@ -23,10 +23,10 @@ class Review(Base):
     status = Column(String(20), default="processing", comment="审查状态（processing=处理中，completed=已完成，failed=失败）")
     
     # 统计信息
-    total_issues = Column(Integer, default=0, comment="不符合项总数")
-    critical_count = Column(Integer, default=0, comment="严重项数量")
-    general_count = Column(Integer, default=0, comment="一般项数量")
-    minor_count = Column(Integer, default=0, comment="轻微项数量")
+    total_issues = Column(Integer, default=0, nullable=False, comment="不符合项总数")
+    critical_count = Column(Integer, default=0, nullable=False, comment="严重项数量")
+    general_count = Column(Integer, default=0, nullable=False, comment="一般项数量")
+    minor_count = Column(Integer, default=0, nullable=False, comment="轻微项数量")
     
     # 时间信息
     review_time = Column(DateTime, server_default=func.now(), comment="审查时间")

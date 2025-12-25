@@ -39,9 +39,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="upload_time" label="上传时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewDetail(row)">查看</el-button>
+            <el-button link type="success" @click="previewDocument(row)">预览</el-button>
             <el-button link type="primary" @click="startReview(row)">开始审查</el-button>
             <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
@@ -114,12 +115,24 @@
           <el-input v-model="uploadForm.department" />
         </el-form-item>
         <el-form-item label="文件" required>
-          <el-upload :auto-upload="false" :on-change="handleFileChange" :limit="1">
+          <el-upload
+            :auto-upload="false"
+            :on-change="handleFileChange"
+            :on-remove="handleFileRemove"
+            :limit="10"
+            multiple
+            :file-list="fileList"
+          >
             <el-button type="primary">选择文件</el-button>
             <template #tip>
-              <div class="el-upload__tip">支持 PDF、Word、TXT、Markdown 格式</div>
+              <div class="el-upload__tip">
+                支持 PDF、Word、TXT、Markdown 格式，最多可上传10个文件
+              </div>
             </template>
           </el-upload>
+          <div v-if="fileList.length > 0" class="file-list-info">
+            已选择 {{ fileList.length }} 个文件
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -127,6 +140,15 @@
         <el-button type="primary" @click="handleUpload" :loading="uploading">上传</el-button>
       </template>
     </el-dialog>
+
+    <!-- 文档预览 -->
+    <DocumentPreview
+      v-model="showPreview"
+      :file-url="previewFileUrl"
+      :file-name="previewFileName"
+      :file-type="previewFileType"
+      title="文档预览"
+    />
   </div>
 </template>
 
@@ -136,6 +158,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload } from '@element-plus/icons-vue'
 import { getDocuments, uploadDocument, deleteDocument, type Document } from '@/api/documents'
 import { getSystemStatus, type SystemStatus } from '@/api/system'
+import { getFilePreviewUrl } from '@/api/files'
+import DocumentPreview from '@/components/DocumentPreview.vue'
 
 const loading = ref(false)
 const documents = ref<Document[]>([])
@@ -153,7 +177,8 @@ const uploadForm = ref({
   author: '',
   department: '',
 })
-const selectedFile = ref<File | null>(null)
+const fileList = ref<any[]>([])
+const selectedFiles = ref<File[]>([])
 
 // 模型状态
 const modelStatus = ref<SystemStatus | null>(null)
@@ -209,28 +234,49 @@ const loadDocuments = async () => {
   }
 }
 
-const handleFileChange = (file: any) => {
-  selectedFile.value = file.raw
+const handleFileChange = (file: any, fileListParam: any[]) => {
+  fileList.value = fileListParam
+  selectedFiles.value = fileListParam.map((f: any) => f.raw).filter(Boolean)
+}
+
+const handleFileRemove = (file: any, fileListParam: any[]) => {
+  fileList.value = fileListParam
+  selectedFiles.value = fileListParam.map((f: any) => f.raw).filter(Boolean)
 }
 
 const handleUpload = async () => {
-  if (!uploadForm.value.name || !selectedFile.value) {
-    ElMessage.warning('请填写完整信息')
+  if (selectedFiles.value.length === 0) {
+    ElMessage.warning('请至少选择一个文件')
     return
   }
+  if (selectedFiles.value.length === 1 && !uploadForm.value.name) {
+    ElMessage.warning('请填写文档名称')
+    return
+  }
+
   uploading.value = true
   try {
-    const formData = new FormData()
-    formData.append('file', selectedFile.value)
-    formData.append('name', uploadForm.value.name)
-    if (uploadForm.value.type) formData.append('type', uploadForm.value.type)
-    if (uploadForm.value.author) formData.append('author', uploadForm.value.author)
-    if (uploadForm.value.department) formData.append('department', uploadForm.value.department)
-    await uploadDocument(formData)
-    ElMessage.success('上传成功')
+    // 批量上传
+    const uploadPromises = selectedFiles.value.map((file, index) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      // 如果只有一个文件，使用表单中的名称；多个文件时使用文件名
+      const name = selectedFiles.value.length === 1
+        ? uploadForm.value.name
+        : file.name.replace(/\.[^/.]+$/, '') // 去掉扩展名
+      formData.append('name', name)
+      if (uploadForm.value.type) formData.append('type', uploadForm.value.type)
+      if (uploadForm.value.author) formData.append('author', uploadForm.value.author)
+      if (uploadForm.value.department) formData.append('department', uploadForm.value.department)
+      return uploadDocument(formData)
+    })
+
+    await Promise.all(uploadPromises)
+    ElMessage.success(`成功上传 ${selectedFiles.value.length} 个文件`)
     showUploadDialog.value = false
     uploadForm.value = { name: '', type: '', author: '', department: '' }
-    selectedFile.value = null
+    fileList.value = []
+    selectedFiles.value = []
     // 重置到第一页并刷新列表
     currentPage.value = 1
     loadDocuments()
@@ -260,8 +306,23 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
+// 预览对话框
+const showPreview = ref(false)
+const previewFileUrl = ref('')
+const previewFileName = ref('')
+const previewFileType = ref('')
+
 const viewDetail = (row: Document) => {
   ElMessage.info('查看详情功能开发中')
+}
+
+const previewDocument = (row: Document) => {
+  previewFileUrl.value = getFilePreviewUrl('document', row.id)
+  previewFileName.value = row.name
+  // 从文件路径获取文件类型
+  const ext = row.file_path.split('.').pop()?.toLowerCase() || ''
+  previewFileType.value = ext
+  showPreview.value = true
 }
 
 const startReview = (row: Document) => {
@@ -389,6 +450,12 @@ onMounted(() => {
 :deep(.el-pagination) {
   margin-top: 20px;
   justify-content: flex-end;
+}
+
+.file-list-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #909399;
 }
 </style>
 

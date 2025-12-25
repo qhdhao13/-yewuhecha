@@ -1,0 +1,90 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/
+backend/venv/
+backend/env/
+
+# 环境变量
+.env
+backend/.env
+*.env.local
+*.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Node.js
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.eslintcache
+
+# 构建输出
+dist/
+build/
+frontend/dist/
+frontend/build/
+*.log
+
+# 数据库
+*.db
+*.db-journal
+backend/data/*.db
+backend/data/*.db-journal
+
+# 上传的文件（保留目录结构）
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+
+# 向量数据库
+backend/data/chroma_db/
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# 系统文件
+Thumbs.db
+desktop.ini

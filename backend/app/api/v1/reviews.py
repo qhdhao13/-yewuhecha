@@ -77,17 +77,24 @@ async def list_reviews(
     """
     获取审查记录列表
     """
-    query = db.query(Review)
-    
-    if document_id:
-        query = query.filter(Review.document_id == document_id)
-    if regulation_id:
-        query = query.filter(Review.regulation_id == regulation_id)
-    if status:
-        query = query.filter(Review.status == status)
-    
-    reviews = query.offset(skip).limit(limit).order_by(Review.review_time.desc()).all()
-    return reviews
+    try:
+        query = db.query(Review)
+        
+        if document_id:
+            query = query.filter(Review.document_id == document_id)
+        if regulation_id:
+            query = query.filter(Review.regulation_id == regulation_id)
+        if status:
+            query = query.filter(Review.status == status)
+        
+        # 注意：order_by() 必须在 offset() 和 limit() 之前调用
+        reviews = query.order_by(Review.review_time.desc()).offset(skip).limit(limit).all()
+        return reviews
+    except Exception as e:
+        print(f"获取审查记录列表失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"获取审查记录列表失败: {str(e)}")
 
 
 @router.get("/{review_id}", response_model=ReviewResponse)

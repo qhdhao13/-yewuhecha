@@ -19,14 +19,15 @@ class ReviewResponse(BaseModel):
     document_id: int
     regulation_id: int
     status: str
-    total_issues: int
-    critical_count: int
-    general_count: int
-    minor_count: int
+    total_issues: int = 0
+    critical_count: int = 0
+    general_count: int = 0
+    minor_count: int = 0
     review_time: datetime
     completed_time: Optional[datetime] = None
     reviewer: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 
