@@ -97,27 +97,33 @@ async def list_documents(
     支持分页、状态筛选、作者筛选和搜索
     返回格式：{"items": [...], "total": 总数}
     """
-    query = db.query(Document).filter(Document.is_deleted == 0)
-    
-    if status:
-        query = query.filter(Document.status == status)
-    if author:
-        query = query.filter(Document.author == author)
-    if department:
-        query = query.filter(Document.department == department)
-    if search:
-        query = query.filter(Document.name.contains(search))
-    
-    # 获取总数
-    total = query.count()
-    
-    # 获取分页数据
-    documents = query.offset(skip).limit(limit).all()
-    
-    return {
-        "items": documents,
-        "total": total
-    }
+    try:
+        query = db.query(Document).filter(Document.is_deleted == 0)
+        
+        if status:
+            query = query.filter(Document.status == status)
+        if author:
+            query = query.filter(Document.author == author)
+        if department:
+            query = query.filter(Document.department == department)
+        if search:
+            query = query.filter(Document.name.contains(search))
+        
+        # 获取总数
+        total = query.count()
+        
+        # 获取分页数据
+        documents = query.offset(skip).limit(limit).all()
+        
+        return {
+            "items": documents,
+            "total": total
+        }
+    except Exception as e:
+        print(f"获取员工文档列表失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"获取员工文档列表失败: {str(e)}")
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -156,7 +162,7 @@ async def update_document(
     if not document:
         raise HTTPException(status_code=404, detail="文档不存在")
     
-    update_data = document_update.dict(exclude_unset=True)
+    update_data = document_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(document, field, value)
     

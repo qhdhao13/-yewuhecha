@@ -87,7 +87,7 @@
     <el-dialog
       v-model="showDetailDialog"
       title="审查详情"
-      width="1200px"
+      width="1400px"
       :close-on-click-modal="false"
     >
       <div v-if="currentReview" class="review-detail" v-loading="detailLoading">
@@ -177,39 +177,136 @@
               </div>
             </div>
           </template>
-          <el-table
-            :data="reviewAnnotations"
-            v-loading="annotationsLoading"
-            style="margin-top: 10px"
-            max-height="400"
-          >
-            <el-table-column prop="id" label="ID" width="80" />
-            <el-table-column prop="issue_type" label="问题类型" width="120">
-              <template #default="{ row }">
-                <el-tag>{{ getIssueTypeText(row.issue_type) }}</el-tag>
+          <!-- 标注列表 - 使用卡片式布局展示问题和建议 -->
+          <div v-if="reviewAnnotations.length === 0" class="empty-annotations">
+            <el-empty description="暂无标注" />
+          </div>
+          <div v-else class="annotations-list">
+            <el-card
+              v-for="annotation in reviewAnnotations"
+              :key="annotation.id"
+              shadow="hover"
+              class="annotation-card"
+              :class="`severity-${annotation.severity}`"
+            >
+              <template #header>
+                <div class="annotation-header">
+                  <div class="header-left">
+                    <el-tag :type="getSeverityType(annotation.severity)" size="large">
+                      {{ getSeverityText(annotation.severity) }}
+                    </el-tag>
+                    <el-tag style="margin-left: 8px">{{ getIssueTypeText(annotation.issue_type) }}</el-tag>
+                    <span class="annotation-id">#{{ annotation.id }}</span>
+                  </div>
+                  <div class="header-right">
+                    <el-tag :type="getAnnotationStatusType(annotation.status)" size="small">
+                      {{ getAnnotationStatusText(annotation.status) }}
+                    </el-tag>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      @click="toggleAnnotationDetail(annotation.id)"
+                      style="margin-left: 8px"
+                    >
+                      {{ expandedAnnotations.has(annotation.id) ? '收起' : '展开' }}
+                    </el-button>
+                  </div>
+                </div>
               </template>
-            </el-table-column>
-            <el-table-column prop="severity" label="严重程度" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getSeverityType(row.severity)">
-                  {{ getSeverityText(row.severity) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="content" label="不符合内容" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="status" label="状态" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getAnnotationStatusType(row.status)">
-                  {{ getAnnotationStatusText(row.status) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
-              <template #default="{ row }">
-                <el-button link type="primary" @click="viewAnnotationDetail(row)">查看</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+
+              <!-- 问题内容 -->
+              <div class="annotation-content">
+                <div class="content-section">
+                  <h4 class="section-title">
+                    <el-icon><Warning /></el-icon>
+                    不符合内容
+                  </h4>
+                  <div class="content-text highlight-text">
+                    {{ annotation.content || '未指定' }}
+                  </div>
+                </div>
+
+                <div class="content-section" v-if="annotation.regulation_clause">
+                  <h4 class="section-title">
+                    <el-icon><Document /></el-icon>
+                    对应制度条款
+                  </h4>
+                  <div class="content-text">
+                    {{ annotation.regulation_clause }}
+                  </div>
+                </div>
+
+                <!-- 展开的详细信息 -->
+                <Transition name="slide-fade">
+                  <div v-if="expandedAnnotations.has(annotation.id)" class="annotation-details">
+                    <!-- 不符合原因 -->
+                    <div class="content-section" v-if="annotation.reason || annotationAISuggestions[annotation.id]?.reason">
+                      <h4 class="section-title">
+                        <el-icon><InfoFilled /></el-icon>
+                        不符合原因
+                      </h4>
+                      <div class="content-text">
+                        {{ annotationAISuggestions[annotation.id]?.reason || annotation.reason || '暂无说明' }}
+                      </div>
+                    </div>
+
+                    <!-- 修改建议 -->
+                    <div class="content-section">
+                      <h4 class="section-title">
+                        <el-icon><QuestionFilled /></el-icon>
+                        修改建议
+                        <el-button
+                          link
+                          type="primary"
+                          size="small"
+                          :loading="generatingSuggestions.has(annotation.id)"
+                          @click="generateSuggestion(annotation)"
+                          style="margin-left: 8px"
+                        >
+                          <el-icon><MagicStick /></el-icon>
+                          {{ annotationAISuggestions[annotation.id] ? '重新生成' : 'AI生成建议' }}
+                        </el-button>
+                      </h4>
+                      <div class="content-text suggestion-text">
+                        <div v-if="annotationAISuggestions[annotation.id]?.suggestion">
+                          {{ annotationAISuggestions[annotation.id].suggestion }}
+                        </div>
+                        <div v-else-if="annotation.suggestion">
+                          {{ annotation.suggestion }}
+                        </div>
+                        <div v-else class="no-suggestion">
+                          暂无建议，点击"AI生成建议"获取智能改进方案
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 详细分析（AI生成） -->
+                    <div class="content-section" v-if="annotationAISuggestions[annotation.id]?.detailed_analysis">
+                      <h4 class="section-title">
+                        <el-icon><Reading /></el-icon>
+                        详细分析
+                      </h4>
+                      <div class="content-text analysis-text">
+                        {{ annotationAISuggestions[annotation.id].detailed_analysis }}
+                      </div>
+                    </div>
+
+                    <!-- 改进后的内容示例（AI生成） -->
+                    <div class="content-section" v-if="annotationAISuggestions[annotation.id]?.improved_content">
+                      <h4 class="section-title">
+                        <el-icon><EditPen /></el-icon>
+                        改进示例
+                      </h4>
+                      <div class="content-text improved-content">
+                        {{ annotationAISuggestions[annotation.id].improved_content }}
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+            </el-card>
+          </div>
         </el-card>
       </div>
       <template #footer>
@@ -228,13 +325,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, Transition } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Warning, Document, InfoFilled, EditPen, QuestionFilled, MagicStick, Reading } from '@element-plus/icons-vue'
 import { getReviews, getReview, createReview, type Review } from '@/api/reviews'
-import { getDocuments, getDocument, type Document } from '@/api/documents'
-import { getRegulations, getRegulation, type Regulation } from '@/api/regulations'
-import { getAnnotations, type Annotation } from '@/api/annotations'
+import { getDocuments, getDocument, type Document as DocumentType } from '@/api/documents'
+import { getRegulations, getRegulation, type Regulation as RegulationType } from '@/api/regulations'
+import { getAnnotations, generateAISuggestion, type Annotation, type AISuggestionResponse } from '@/api/annotations'
 import { exportReviewReport } from '@/utils/export'
 
 const loading = ref(false)
@@ -250,15 +347,15 @@ const reviewForm = ref({
   regulation_id: 0,
   reviewer: '',
 })
-const documents = ref<Document[]>([])
-const regulations = ref<Regulation[]>([])
+const documents = ref<DocumentType[]>([])
+const regulations = ref<RegulationType[]>([])
 
 // 详情对话框
 const showDetailDialog = ref(false)
 const detailLoading = ref(false)
 const currentReview = ref<Review | null>(null)
-const documentInfo = ref<Document | null>(null)
-const regulationInfo = ref<Regulation | null>(null)
+const documentInfo = ref<DocumentType | null>(null)
+const regulationInfo = ref<RegulationType | null>(null)
 
 // 标注列表
 const annotationsLoading = ref(false)
@@ -267,6 +364,15 @@ const annotationFilter = ref({
   severity: '',
   status: '',
 })
+
+// 展开的标注ID集合
+const expandedAnnotations = ref<Set<number>>(new Set())
+
+// AI建议数据
+const annotationAISuggestions = ref<Record<number, AISuggestionResponse>>({})
+
+// 正在生成建议的标注ID集合
+const generatingSuggestions = ref<Set<number>>(new Set())
 
 const loadReviews = async () => {
   loading.value = true
@@ -430,10 +536,45 @@ const loadAnnotations = async () => {
     }
     const data = await getAnnotations(params)
     reviewAnnotations.value = Array.isArray(data) ? data : []
+    // 重置展开状态和AI建议
+    expandedAnnotations.value.clear()
+    annotationAISuggestions.value = {}
   } catch (error) {
     ElMessage.error('加载标注列表失败')
   } finally {
     annotationsLoading.value = false
+  }
+}
+
+// 切换标注详情展开/收起
+const toggleAnnotationDetail = (annotationId: number) => {
+  if (expandedAnnotations.value.has(annotationId)) {
+    expandedAnnotations.value.delete(annotationId)
+  } else {
+    expandedAnnotations.value.add(annotationId)
+  }
+}
+
+// 生成AI改进建议
+const generateSuggestion = async (annotation: Annotation) => {
+  generatingSuggestions.value.add(annotation.id)
+  try {
+    const result = await generateAISuggestion(annotation.id)
+    if (result.success) {
+      annotationAISuggestions.value[annotation.id] = result
+      // 如果建议已生成，自动展开
+      if (!expandedAnnotations.value.has(annotation.id)) {
+        expandedAnnotations.value.add(annotation.id)
+      }
+      ElMessage.success('AI建议生成成功')
+    } else {
+      ElMessage.warning('生成建议失败，请稍后重试')
+    }
+  } catch (error) {
+    console.error('生成AI建议失败:', error)
+    ElMessage.error('生成AI建议失败')
+  } finally {
+    generatingSuggestions.value.delete(annotation.id)
   }
 }
 
@@ -630,6 +771,154 @@ onMounted(() => {
 :deep(.el-dialog__footer) {
   padding: 16px 20px;
   border-top: 1px solid #ebeef5;
+}
+
+/* 标注列表样式 */
+.empty-annotations {
+  padding: 40px 0;
+  text-align: center;
+}
+
+.annotations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.annotation-card {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.annotation-card.severity-critical {
+  border-left: 4px solid #f56c6c;
+}
+
+.annotation-card.severity-general {
+  border-left: 4px solid #e6a23c;
+}
+
+.annotation-card.severity-minor {
+  border-left: 4px solid #909399;
+}
+
+.annotation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.annotation-id {
+  color: #909399;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.annotation-content {
+  padding: 0;
+}
+
+.content-section {
+  margin-bottom: 20px;
+}
+
+.content-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.content-text {
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  line-height: 1.6;
+  color: #606266;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.highlight-text {
+  background: linear-gradient(120deg, #fff3cd 0%, #ffe69c 100%);
+  border-left: 3px solid #ffc107;
+  font-weight: 500;
+}
+
+.suggestion-text {
+  background: linear-gradient(120deg, #d1ecf1 0%, #bee5eb 100%);
+  border-left: 3px solid #17a2b8;
+}
+
+.analysis-text {
+  background-color: #f0f9ff;
+  border-left: 3px solid #409eff;
+}
+
+.improved-content {
+  background: linear-gradient(120deg, #d4edda 0%, #c3e6cb 100%);
+  border-left: 3px solid #28a745;
+  font-style: italic;
+}
+
+.no-suggestion {
+  color: #909399;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+.annotation-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+:deep(.el-card__header) {
+  padding: 16px 20px;
+  background-color: #fafafa;
+}
+
+:deep(.el-card__body) {
+  padding: 20px;
+}
+
+/* 过渡动画 */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.2s ease-in;
+}
+
+.slide-fade-enter-from {
+  transform: translateY(-10px);
+  opacity: 0;
+}
+
+.slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
 }
 </style>
 

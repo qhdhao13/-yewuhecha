@@ -37,6 +37,7 @@ class DocumentResponse(DocumentBase):
     status: str
     upload_time: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 

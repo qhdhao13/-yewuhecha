@@ -26,8 +26,9 @@ class AnnotationResponse(BaseModel):
     update_time: datetime
     reviewer: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class AnnotationUpdate(BaseModel):

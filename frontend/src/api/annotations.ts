@@ -67,3 +67,18 @@ export const deleteAnnotation = (id: number) => {
   return request.delete(`/annotations/${id}`)
 }
 
+/**
+ * 生成AI改进建议
+ */
+export interface AISuggestionResponse {
+  success: boolean
+  suggestion?: string
+  reason?: string
+  detailed_analysis?: string
+  improved_content?: string
+}
+
+export const generateAISuggestion = (id: number) => {
+  return request.post<AISuggestionResponse>(`/annotations/${id}/generate-suggestion`)
+}
+

@@ -108,23 +108,29 @@ async def list_regulations(
     支持分页、类型筛选和搜索
     返回格式：{"items": [...], "total": 总数}
     """
-    query = db.query(Regulation).filter(Regulation.is_deleted == 0)
-    
-    if type:
-        query = query.filter(Regulation.type == type)
-    if search:
-        query = query.filter(Regulation.name.contains(search))
-    
-    # 获取总数
-    total = query.count()
-    
-    # 获取分页数据
-    regulations = query.offset(skip).limit(limit).all()
-    
-    return {
-        "items": regulations,
-        "total": total
-    }
+    try:
+        query = db.query(Regulation).filter(Regulation.is_deleted == 0)
+        
+        if type:
+            query = query.filter(Regulation.type == type)
+        if search:
+            query = query.filter(Regulation.name.contains(search))
+        
+        # 获取总数
+        total = query.count()
+        
+        # 获取分页数据
+        regulations = query.offset(skip).limit(limit).all()
+        
+        return {
+            "items": regulations,
+            "total": total
+        }
+    except Exception as e:
+        print(f"获取制度文件列表失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"获取制度文件列表失败: {str(e)}")
 
 
 @router.get("/{regulation_id}", response_model=RegulationResponse)
@@ -165,7 +171,7 @@ async def update_regulation(
         raise HTTPException(status_code=404, detail="制度文件不存在")
     
     # 更新字段
-    update_data = regulation_update.dict(exclude_unset=True)
+    update_data = regulation_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(regulation, field, value)
     

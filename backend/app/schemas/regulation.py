@@ -37,6 +37,7 @@ class RegulationResponse(RegulationBase):
     file_size: Optional[int] = None
     upload_time: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 

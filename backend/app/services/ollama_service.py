@@ -146,6 +146,119 @@ class OllamaService:
             print(f"文档对比失败: {str(e)}")
             return {"issues": []}
     
+    def generate_enhanced_suggestion(
+        self, 
+        issue_description: str, 
+        regulation_clause: str,
+        issue_type: str = "",
+        severity: str = ""
+    ) -> Dict[str, str]:
+        """
+        生成增强的改进建议
+        提供更详细、更实用的改进建议，包括：
+        - 详细的问题分析
+        - 具体的修改建议
+        - 改进后的内容示例
+        
+        返回格式：
+        {
+            "reason": "不符合原因的详细说明",
+            "suggestion": "具体的修改建议",
+            "detailed_analysis": "详细的问题分析",
+            "improved_content": "改进后的内容示例"
+        }
+        """
+        severity_text = {
+            "critical": "严重",
+            "general": "一般",
+            "minor": "轻微"
+        }.get(severity, "一般")
+        
+        issue_type_text = {
+            "content_mismatch": "内容不符",
+            "missing": "缺失项",
+            "extra": "多余项",
+            "format": "格式不符"
+        }.get(issue_type, "问题")
+        
+        prompt = f"""你是一个专业的合规审查专家。请为以下合规问题生成详细的分析和改进建议。
+
+问题信息：
+- 问题类型：{issue_type_text}
+- 严重程度：{severity_text}
+- 问题描述：{issue_description}
+- 对应的制度条款：{regulation_clause}
+
+请生成以下内容：
+
+1. **详细问题分析**：深入分析为什么这个问题不符合制度要求，可能造成的影响和风险。
+
+2. **具体修改建议**：提供清晰、可操作的修改建议，包括：
+   - 应该修改什么内容
+   - 如何修改
+   - 修改后的预期效果
+
+3. **改进后的内容示例**：如果可能，提供一个改进后的内容示例，展示修改后的正确表述。
+
+请按以下JSON格式输出：
+{{
+    "reason": "不符合原因的详细说明（2-3句话）",
+    "suggestion": "具体的修改建议（详细说明如何修改，3-5句话）",
+    "detailed_analysis": "详细的问题分析（分析问题原因、影响和风险，5-8句话）",
+    "improved_content": "改进后的内容示例（如果适用，提供修改后的正确表述）"
+}}
+
+只返回JSON格式，不要有其他说明文字。"""
+
+        try:
+            response = ollama.chat(
+                model=self.llm_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个专业的合规审查专家，擅长深入分析合规问题并提供详细、实用的改进建议。请严格按照JSON格式输出结果。"
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                options={
+                    "temperature": 0.6,  # 稍微提高温度以获得更丰富的建议
+                }
+            )
+            
+            if response and 'message' in response:
+                content = response['message'].get('content', '')
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                    result = json.loads(json_str)
+                    return result
+                else:
+                    return {
+                        "reason": "无法生成详细说明",
+                        "suggestion": "请参考制度条款进行修改",
+                        "detailed_analysis": "",
+                        "improved_content": ""
+                    }
+            else:
+                return {
+                    "reason": "无法生成详细说明",
+                    "suggestion": "请参考制度条款进行修改",
+                    "detailed_analysis": "",
+                    "improved_content": ""
+                }
+                
+        except Exception as e:
+            print(f"生成增强建议失败: {str(e)}")
+            return {
+                "reason": "生成说明时出错",
+                "suggestion": "请参考制度条款进行修改",
+                "detailed_analysis": "",
+                "improved_content": ""
+            }
+    
     def generate_annotation(self, issue_description: str, regulation_clause: str) -> Dict[str, str]:
         """
         生成标注信息
